@@ -28,6 +28,6 @@ jobs:
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "actions@github.com"
-          git add proxyip.txt
+          git add proxyip.txt fastip.txt slowip.txt
           git commit -m "Update proxy IP list" || echo "No changes to commit"
           git push
