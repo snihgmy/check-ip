@@ -13,24 +13,19 @@ TEST_DOMAINS = ["chat.openai.com", "dash.cloudflare.com"]
 async def test_ip(ip, session):
     url = f"http://{ip}"
     headers = {
-        "User-Agent": "Mozilla/5.0",
-        "Accept-Encoding": "identity"
+        "User-Agent": "Mozilla/5.0"
     }
 
     for domain in TEST_DOMAINS:
         headers["Host"] = domain
         try:
-            start = time.time()
             async with session.get(url, headers=headers, timeout=TIMEOUT) as resp:
                 if resp.status != 200:
-                    return None
-                data = await resp.content.read(TEST_SIZE)
-                speed = len(data) / (time.time() - start) / 1024  # KB/s
-                if speed < 1024:  # <1MB/s
                     return None
         except Exception:
             return None
     return ip
+
 
 async def main():
     with open(INPUT_FILE) as f:
