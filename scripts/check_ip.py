@@ -1,57 +1,52 @@
 import asyncio
 import aiohttp
-from aiohttp import ClientTimeout
+import time
 
 INPUT_FILE = "ip.txt"
 OUTPUT_FILE = "proxyip.txt"
+TIMEOUT = 10
+TEST_SIZE = 500 * 1024  # 500 KB 测速
+WORKER_HOST = "banana.cffamw.cloudns.org"
 
-WORKER_DOMAIN = "minisub.pages.dev"  # 你的 Cloudflare Pages 或 Workers 域名
-CHECK_HOSTS = {
-    "chat.openai.com": "ChatGPT",
-    "dash.cloudflare.com": "Cloudflare"
-}
+TEST_DOMAINS = ["chat.openai.com", "dash.cloudflare.com"]
 
-TIMEOUT = 10  # 秒
-
-async def test_ip(ip: str, session: aiohttp.ClientSession) -> bool:
-    headers_template = {
+async def test_ip(ip, session):
+    url = f"http://{ip}"
+    headers = {
         "User-Agent": "Mozilla/5.0",
-        "CF-Connecting-IP": "1.1.1.1",  # 可选：模拟真实请求
+        "Accept-Encoding": "identity"
     }
 
-    for host, tag in CHECK_HOSTS.items():
+    for domain in TEST_DOMAINS:
+        headers["Host"] = domain
         try:
-            url = f"http://{ip}"
-            headers = headers_template.copy()
-            headers["Host"] = host
-
-            async with session.get(url, headers=headers, timeout=ClientTimeout(total=TIMEOUT)) as resp:
-                text = await resp.text()
-                if "cf-error" in text or resp.status != 200:
-                    return False
+            start = time.time()
+            async with session.get(url, headers=headers, timeout=TIMEOUT) as resp:
+                if resp.status != 200:
+                    return None
+                data = await resp.content.read(TEST_SIZE)
+                speed = len(data) / (time.time() - start) / 1024  # KB/s
+                if speed < 1024:  # <1MB/s
+                    return None
         except Exception:
-            return False
-    return True
+            return None
+    return ip
 
 async def main():
-    with open(INPUT_FILE, "r") as f:
+    with open(INPUT_FILE) as f:
         ip_list = [line.strip() for line in f if line.strip()]
 
-    results = []
-    conn = aiohttp.TCPConnector(ssl=False)
-    async with aiohttp.ClientSession(connector=conn) as session:
+    connector = aiohttp.TCPConnector(ssl=False)
+    async with aiohttp.ClientSession(connector=connector) as session:
         tasks = [test_ip(ip, session) for ip in ip_list]
-        check_results = await asyncio.gather(*tasks)
+        results = await asyncio.gather(*tasks)
 
-    for ip, is_valid in zip(ip_list, check_results):
-        if is_valid:
-            results.append(ip)
-
+    valid_ips = [ip for ip in results if ip]
     with open(OUTPUT_FILE, "w") as f:
-        for ip in results:
+        for ip in valid_ips:
             f.write(ip + "\n")
 
-    print(f"✅ 有效IP数量: {len(results)}")
+    print(f"✅ 有效 IP 数量：{len(valid_ips)}")
 
 if __name__ == "__main__":
     asyncio.run(main())
